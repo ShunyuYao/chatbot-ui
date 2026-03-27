@@ -3,7 +3,7 @@ import { createSharedChat, getSharedChatByChatId } from "@/db/shared-chats"
 import { Tables } from "@/supabase/types"
 import { IconShare } from "@tabler/icons-react"
 import { FC, useContext, useState } from "react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 interface ShareChatProps {
   chat: Tables<"chats">
@@ -11,7 +11,6 @@ interface ShareChatProps {
 
 export const ShareChat: FC<ShareChatProps> = ({ chat }) => {
   const { profile } = useContext(ChatbotUIContext)
-  const { toast } = useToast()
   const [isSharing, setIsSharing] = useState(false)
 
   const handleShare = async () => {
@@ -32,9 +31,9 @@ export const ShareChat: FC<ShareChatProps> = ({ chat }) => {
       const shareUrl = `${window.location.origin}/share/${shareToken}`
       await navigator.clipboard.writeText(shareUrl)
 
-      toast({ title: "链接已复制" })
+      toast.success("链接已复制")
     } catch {
-      toast({ title: "分享失败，请重试", variant: "destructive" })
+      toast.error("分享失败，请重试")
     } finally {
       setIsSharing(false)
     }

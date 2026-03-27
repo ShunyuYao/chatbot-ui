@@ -11,9 +11,10 @@
 - **Radix UI**: `PopoverTrigger` must use `asChild` when its child is a `<Button>` component, otherwise renders `<button>` inside `<button>` causing a DOM nesting violation and React console error
 - **dev-browser**: To send a chat message, use `locator("textarea").first().focus()` then `keyboard.press("Enter")` — `getByPlaceholder` times out on this component
 - **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
-- **DB Migrations**: Local Docker/Supabase not running; cloud Supabase is used. `npm run db-migrate` won't work — update `supabase/types.ts` manually to match migration SQL. `.gitignore` has `*.sql` but migration files are now allowed via `!supabase/migrations/*.sql`
+- **DB Migrations**: `npm run db-migrate` won't work without local Docker — update `supabase/types.ts` manually, then apply SQL via Supabase Management API (see root CLAUDE.md). `.gitignore` has `*.sql` but migration files are allowed via `!supabase/migrations/*.sql`
 - **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; `shared_chats` is between `prompts` and `tool_workspaces`
-- **Toast notifications**: Use `useToast` hook from `@/components/ui/use-toast` — destructure `{ toast }` from `useToast()`, call `toast({ title: "..." })` for success and `toast({ title: "...", variant: "destructive" })` for errors
+- **Toast notifications**: Use `sonner` (see root CLAUDE.md). ⚠️ Do NOT use `useToast` from `@/components/ui/use-toast`.
+- **ChatSettings in active chat**: `ChatSettings` (model name + gear icon) is only shown on the empty-chat page by default. To show it during active chat, import and add `<ChatSettings />` to the right-side absolute div in `chat-ui.tsx`. Auto-save settings changes to DB using a debounced `useEffect` on `chatSettings` that calls `updateChat()` when `selectedChat` is non-null (500ms debounce).
 ---
 
 # Ralph Progress Log

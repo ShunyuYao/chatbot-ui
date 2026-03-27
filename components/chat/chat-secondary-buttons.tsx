@@ -1,16 +1,15 @@
 import { useChatHandler } from "@/components/chat/chat-hooks/use-chat-handler"
-import { useToast } from "@/components/ui/use-toast"
 import { ChatbotUIContext } from "@/context/context"
 import { createSharedChat, getSharedChatByChatId } from "@/db/shared-chats"
 import { IconInfoCircle, IconMessagePlus, IconShare } from "@tabler/icons-react"
 import { FC, useContext, useState } from "react"
+import { toast } from "sonner"
 import { WithTooltip } from "../ui/with-tooltip"
 
 interface ChatSecondaryButtonsProps {}
 
 export const ChatSecondaryButtons: FC<ChatSecondaryButtonsProps> = ({}) => {
   const { selectedChat, profile } = useContext(ChatbotUIContext)
-  const { toast } = useToast()
   const [isSharing, setIsSharing] = useState(false)
 
   const { handleNewChat } = useChatHandler()
@@ -36,9 +35,9 @@ export const ChatSecondaryButtons: FC<ChatSecondaryButtonsProps> = ({}) => {
       const shareUrl = `${window.location.origin}/share/${shareToken}`
       await navigator.clipboard.writeText(shareUrl)
 
-      toast({ title: "链接已复制" })
+      toast.success("链接已复制")
     } catch {
-      toast({ title: "分享失败，请重试", variant: "destructive" })
+      toast.error("分享失败，请重试")
     } finally {
       setIsSharing(false)
     }
