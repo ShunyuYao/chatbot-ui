@@ -78,6 +78,8 @@ Sequential SQL migrations. Key tables: `profiles`, `workspaces`, `chats`, `messa
 Requires `.env.local` (copy from `.env.local.example`) with:
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for retrieval)
+- `SUPABASE_ACCESS_TOKEN` — Supabase personal access token for running migrations via Management API
+- `GH_TOKEN` — GitHub classic token (`ghp_`) with `repo` scope, used by `gh` CLI for PR creation and merging. Fine-grained PATs (`github_pat_`) lack the GraphQL `mergePullRequest` permission and cannot merge PRs.
 - LLM API keys are optional at server level — users can provide their own in profile settings
 
 Local development requires Docker (for Supabase) and Node.js v18+.

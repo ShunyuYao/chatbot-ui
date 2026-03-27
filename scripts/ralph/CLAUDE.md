@@ -113,6 +113,10 @@ If ALL stories are complete and passing:
    ```
    gh pr merge --auto --squash
    ```
+   - Requires `GH_TOKEN` env var set to a **classic** token (`ghp_`) with `repo` scope
+   - Fine-grained PATs (`github_pat_`) cannot merge PRs (missing GraphQL permission)
+   - If repo has never had a PR merged, first enable auto-merge in repo settings: `gh api repos/{owner}/{repo} -X PATCH -f allow_auto_merge=true`
+   - If no branch protection rules exist, the PR merges immediately
 3. Reply with:
    <promise>COMPLETE</promise>
 

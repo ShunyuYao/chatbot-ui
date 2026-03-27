@@ -14,7 +14,8 @@
 - **DB Migrations**: `npm run db-migrate` won't work without local Docker — update `supabase/types.ts` manually, then apply SQL via Supabase Management API (see root CLAUDE.md). `.gitignore` has `*.sql` but migration files are allowed via `!supabase/migrations/*.sql`
 - **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; `shared_chats` is between `prompts` and `tool_workspaces`
 - **Toast notifications**: Use `sonner` (see root CLAUDE.md). ⚠️ Do NOT use `useToast` from `@/components/ui/use-toast`.
-- **ChatSettings in active chat**: `ChatSettings` (model name + gear icon) is only shown on the empty-chat page by default. To show it during active chat, import and add `<ChatSettings />` to the right-side absolute div in `chat-ui.tsx`. Auto-save settings changes to DB using a debounced `useEffect` on `chatSettings` that calls `updateChat()` when `selectedChat` is non-null (500ms debounce).
+- **GitHub CLI auth**: Set `GH_TOKEN` env var (from `.env.local`) — no interactive login needed. Must use a **classic token** (`ghp_`), NOT fine-grained PAT (`github_pat_`); fine-grained PATs lack GraphQL `mergePullRequest` permission and will get HTTP 403 on merge.
+- **Auto-merge setup**: Before first use, enable auto-merge on the repo: `gh api repos/{owner}/{repo} -X PATCH -f allow_auto_merge=true`. Then `gh pr merge --auto --squash`. If no branch protection rules exist, the PR merges immediately.
 ---
 
 # Ralph Progress Log
