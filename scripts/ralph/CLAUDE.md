@@ -113,7 +113,11 @@ If ALL stories are complete and passing:
    ```
    gh pr merge --auto --squash
    ```
-3. Reply with:
+3. Deploy to production after the PR is merged:
+   ```
+   ssh volc_claw "cd /root/chatbot-ui && git pull && nice -n 19 bash -c 'NODE_OPTIONS=--max-old-space-size=1536 npm run build' && pm2 restart chatbot-ui"
+   ```
+4. Reply with:
    <promise>COMPLETE</promise>
 
 If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
