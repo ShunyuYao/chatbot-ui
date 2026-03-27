@@ -7,7 +7,6 @@ import { FC, useContext, useEffect, useRef } from "react"
 import { Button } from "../ui/button"
 import { ChatSettingsForm } from "../ui/chat-settings-form"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
-import { updateChat } from "@/db/chats"
 
 interface ChatSettingsProps {}
 
@@ -17,7 +16,6 @@ export const ChatSettings: FC<ChatSettingsProps> = ({}) => {
   const {
     chatSettings,
     setChatSettings,
-    selectedChat,
     models,
     availableHostedModels,
     availableLocalModels,
@@ -48,33 +46,6 @@ export const ChatSettings: FC<ChatSettingsProps> = ({}) => {
     })
   }, [chatSettings?.model])
 
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (!chatSettings || !selectedChat) return
-
-    const chatId = selectedChat.id
-    const settings = chatSettings
-
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-
-    saveTimeoutRef.current = setTimeout(() => {
-      updateChat(chatId, {
-        model: settings.model,
-        prompt: settings.prompt,
-        temperature: settings.temperature,
-        context_length: settings.contextLength,
-        include_profile_context: settings.includeProfileContext,
-        include_workspace_instructions: settings.includeWorkspaceInstructions,
-        embeddings_provider: settings.embeddingsProvider
-      })
-    }, 500)
-
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    }
-  }, [chatSettings])
-
   if (!chatSettings) return null
 
   const allModels = [
@@ -95,7 +66,7 @@ export const ChatSettings: FC<ChatSettingsProps> = ({}) => {
 
   return (
     <Popover>
-      <PopoverTrigger>
+      <PopoverTrigger asChild>
         <Button
           ref={buttonRef}
           className="flex items-center space-x-2"

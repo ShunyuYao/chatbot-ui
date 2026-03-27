@@ -3,7 +3,7 @@ import { useChatHandler } from "@/components/chat/chat-hooks/use-chat-handler"
 import { ChatbotUIContext } from "@/context/context"
 import { getAssistantToolsByAssistantId } from "@/db/assistant-tools"
 import { getChatFilesByChatId } from "@/db/chat-files"
-import { getChatById } from "@/db/chats"
+import { getChatById, updateChat } from "@/db/chats"
 import { getMessageFileItemsByMessageId } from "@/db/message-file-items"
 import { getMessagesByChatId } from "@/db/messages"
 import { getMessageImageFromStorage } from "@/db/storage/message-images"
@@ -11,7 +11,7 @@ import { convertBlobToBase64 } from "@/lib/blob-to-b64"
 import useHotkey from "@/lib/hooks/use-hotkey"
 import { LLMID, MessageImage } from "@/types"
 import { useParams } from "next/navigation"
-import { FC, useContext, useEffect, useState } from "react"
+import { FC, useContext, useEffect, useRef, useState } from "react"
 import { ChatHelp } from "./chat-help"
 import { useScroll } from "./chat-hooks/use-scroll"
 import { ChatInput } from "./chat-input"
@@ -28,6 +28,7 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   const params = useParams()
 
   const {
+    chatSettings,
     setChatMessages,
     selectedChat,
     setSelectedChat,
@@ -57,6 +58,31 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   } = useScroll()
 
   const [loading, setLoading] = useState(true)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-save chatSettings to DB when changed during active chat (debounced 400ms)
+  useEffect(() => {
+    if (!chatSettings || !selectedChat || loading) return
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      await updateChat(selectedChat.id, {
+        model: chatSettings.model,
+        prompt: chatSettings.prompt,
+        temperature: chatSettings.temperature,
+        context_length: chatSettings.contextLength,
+        include_profile_context: chatSettings.includeProfileContext,
+        include_workspace_instructions:
+          chatSettings.includeWorkspaceInstructions,
+        embeddings_provider: chatSettings.embeddingsProvider
+      })
+    }, 400)
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [chatSettings])
 
   useEffect(() => {
     const fetchData = async () => {
