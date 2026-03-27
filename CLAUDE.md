@@ -92,3 +92,12 @@ Local development requires Docker (for Supabase) and Node.js v18+.
      -d '{"query": "...SQL..."}'
    ```
    `supabase db push` also works if you have a personal access token, but direct Postgres connections may be blocked by the network.
+
+## Production Deployment (volc_claw server)
+
+- Server: `volc_claw` (118.196.115.15), managed via PM2 (`pm2 restart chatbot-ui`)
+- Deploy flow after pushing to main:
+  ```
+  ssh volc_claw "cd /root/chatbot-ui && git pull && nice -n 19 bash -c 'NODE_OPTIONS=--max-old-space-size=1536 npm run build' && pm2 restart chatbot-ui"
+  ```
+- `nice -n 19` and `NODE_OPTIONS` are required — the server has only 2 vCPUs and build will crash the machine without them
