@@ -1,0 +1,80 @@
+## Codebase Patterns
+- `ChatSettings` component is a self-contained popover button (model name + gear icon) that reads/writes `chatSettings` from `ChatbotUIContext`
+- `npm run type-check` requires `tsc` via local binary: use `node_modules/.bin/tsc --noEmit`
+- Pre-existing TS errors in playwright tests and image imports are not caused by our changes
+- The chat UI layout in `chat-ui.tsx` uses absolute positioning: top-left for scroll buttons, top-right for action buttons
+- `ChatUI` `loading` state starts `true`, set to `false` after `fetchData()` completes; use to guard against firing effects on initial load
+- ChatSettings fields use camelCase; DB columns use snake_case (e.g., `contextLength → context_length`)
+- `updateChat` in `db/chats.ts` accepts `TablesUpdate<"chats">` with all fields optional
+- **Radix UI**: `PopoverTrigger` must use `asChild` when its child is a `<Button>` component, otherwise renders `<button>` inside `<button>` causing a DOM nesting violation and React console error
+- **dev-browser**: To send a chat message, use `locator("textarea").first().focus()` then `keyboard.press("Enter")` — `getByPlaceholder` times out on this component
+- **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
+---
+
+# Ralph Progress Log
+Started: Fri Mar 27 11:01:47 AM CST 2026
+---
+
+## 2026-03-27 - US-001
+- Added `import { ChatSettings } from "./chat-settings"` to `components/chat/chat-ui.tsx`
+- Added `<ChatSettings />` before `<ChatSecondaryButtons />` in the absolute top-right div
+- Files changed: `components/chat/chat-ui.tsx`
+- **Learnings for future iterations:**
+  - `ChatSettings` was only rendered in the empty chat view (`chat/page.tsx` top-right); `ChatUI` (active chat) had no `ChatSettings`
+  - The absolute top-right container in `chat-ui.tsx` is the right place for header actions
+  - `ChatSettings` already handles model clamping via `useEffect` on `chatSettings.model` - no extra work needed for US-002
+  - Pre-existing TS errors: playwright module not found, image type declarations missing (not our code)
+---
+
+## 2026-03-27 - US-002
+- No code changes needed - functionality already fully implemented
+- `ChatSettingsForm` already supports all parameters (model, prompt, temperature, contextLength, includeProfileContext, includeWorkspaceInstructions, embeddingsProvider) without any disabled states
+- Model clamping via `useEffect` on `chatSettings.model` already exists in `ChatSettings`
+- US-001 was the enabling change - once `ChatSettings` was shown in `ChatUI`, all editing worked automatically
+- Typecheck passes with no errors
+- Files changed: `tasks/prd.json`, `scripts/ralph/progress.txt` (tracking only)
+- **Learnings for future iterations:**
+  - `ChatSettingsForm` has no `isGenerating` checks or disabled props - all fields are always editable
+  - `chat/page.tsx` uses mutually exclusive rendering: empty state shows standalone `ChatSettings`; active chat renders `ChatUI` which now has its own `ChatSettings`
+  - No duplicate `ChatSettings` rendering - they're in separate conditional branches
+---
+
+## 2026-03-27 - US-003
+- Added debounced auto-save `useEffect` in `components/chat/chat-ui.tsx`
+- Added `updateChat` to import from `@/db/chats`
+- Added `useRef` to React import
+- Added `chatSettings` to context destructuring
+- Auto-save fires 400ms after chatSettings changes, guarded by `loading` state to skip initial DB load
+- Maps ChatSettings fields to DB columns: `contextLength → context_length`, `includeProfileContext → include_profile_context`, `includeWorkspaceInstructions → include_workspace_instructions`, `embeddingsProvider → embeddings_provider`
+- Files changed: `components/chat/chat-ui.tsx`, `tasks/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The `loading` state in `ChatUI` starts `true` and is set to `false` only after `fetchData()` completes; use it to guard against saving on initial load
+  - ChatSettings fields use camelCase; DB columns use snake_case - always map explicitly
+  - `updateChat` in `db/chats.ts` accepts `TablesUpdate<"chats">` - all fields optional
+---
+
+## 2026-03-27 - US-004
+- No code changes needed - functionality already implemented
+- `handleSendMessage` in `use-chat-handler.tsx` uses `chatSettings!` from context directly for every message send
+- Since chatSettings is always current in context (US-002), any parameter change is automatically reflected in the next API call
+- Existing messages are never touched by `handleSendMessage` - it only creates new messages
+- New chat creation (when `currentChat` is null) also uses current `chatSettings` via `handleCreateChat`
+- Typecheck passes
+- Files changed: `tasks/prd.json`, `scripts/ralph/progress.txt` (tracking only)
+- **Learnings for future iterations:**
+  - `handleSendMessage` takes `chatSettings` snapshot from context at call time - no special handling needed for mid-chat changes
+  - The whole feature (US-001 through US-004) required only: (1) showing ChatSettings in ChatUI, (2) debounced DB auto-save. The rest was already there.
+---
+
+## 2026-03-27 - Browser Verification (post-Ralph)
+- Manually verified US-001 and US-002 in browser using dev-browser skill
+- US-001 ✅: active chat header shows `gpt-5.4` + gear icon, popover opens correctly, does not obstruct message area
+- US-002 ✅: all 7 parameters editable in active chat — Model, Prompt, Temperature slider, Context Length slider, Include Profile Context checkbox, Include Workspace Instructions checkbox, Embeddings Provider dropdown
+- **Bug found and fixed**: `PopoverTrigger` in `components/chat/chat-settings.tsx` was missing `asChild`, causing `<button>` nested inside `<button>` DOM violation (React console error). Fixed by adding `asChild` to `PopoverTrigger`.
+- Files changed: `components/chat/chat-settings.tsx`
+- **Learnings for future iterations:**
+  - Always check browser console after UI changes — typecheck passing does not catch DOM nesting violations
+  - `PopoverTrigger` without `asChild` renders its own `<button>`, wrapping another `<button>` → illegal HTML
+  - dev-browser login flow: fill email/password by role ("you@example.com" / "••••••••"), then click "Login" button
+  - dev-browser send message: `locator("textarea").first().focus()` + `keyboard.press("Enter")`
+---

@@ -1,0 +1,71 @@
+{
+  "project": "Chatbot UI",
+  "branchName": "ralph/chat-settings-always-editable",
+  "description": "Chat Settings Always Editable - Allow users to modify all model parameters at any point during a chat session with auto-save to database",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Show chat settings button during active chat",
+      "description": "As a user, I want to see the chat settings button (model name + gear icon) in the top-right corner even after I've sent messages, so that I can access settings at any time.",
+      "acceptanceCriteria": [
+        "The ChatSettings component renders in the chat header when chatMessages.length > 0",
+        "The button displays the current model name and gear icon, same as before chat starts",
+        "Clicking the button opens the same settings popover as before",
+        "The settings popover does not overlap or obstruct the chat message area",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Added ChatSettings import and component to chat-ui.tsx top-right header area alongside ChatSecondaryButtons. Browser verified ✅: button visible in active chat, popover opens without obstructing messages. Bug fixed: PopoverTrigger was missing asChild causing button-in-button DOM violation."
+    },
+    {
+      "id": "US-002",
+      "title": "Edit all parameters during active chat",
+      "description": "As a user, I want to modify system prompt, model, temperature, context length, and other settings during a chat, so that I can fine-tune my conversation without starting over.",
+      "acceptanceCriteria": [
+        "All parameters are editable during active chat: model, prompt, temperature, context length, include profile context, include workspace instructions, embeddings provider",
+        "Editing any parameter updates the in-memory chatSettings state immediately",
+        "The settings form behaves identically to pre-chat editing (same validation, same sliders, same dropdowns)",
+        "When model is changed, temperature and context length are clamped to the new model's valid ranges",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "No code changes needed - ChatSettingsForm already supports all parameters (model, prompt, temperature, contextLength, includeProfileContext, includeWorkspaceInstructions, embeddingsProvider) with no disabled states. Model clamping already handled by useEffect in ChatSettings. US-001 made this functional by adding ChatSettings to ChatUI. Browser verified ✅: all 7 parameters confirmed editable in active chat."
+    },
+    {
+      "id": "US-003",
+      "title": "Auto-save settings changes to database",
+      "description": "As a user, I want my parameter changes to be automatically saved to the chat record, so that the settings persist when I reload the page or revisit the chat later.",
+      "acceptanceCriteria": [
+        "When a parameter is changed during an active chat, updateChat() is called with the updated settings",
+        "The chats table record is updated with the new values for: model, prompt, temperature, context_length, include_profile_context, include_workspace_instructions, embeddings_provider",
+        "The updated_at timestamp is refreshed on save",
+        "After page refresh, reopening the chat shows the last-saved parameter values",
+        "Auto-save is debounced (300-500ms) to avoid excessive database writes when adjusting sliders",
+        "For new chats (before first message), existing behavior is preserved: settings are saved when first message is sent",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Added debounced (400ms) auto-save useEffect in chat-ui.tsx that watches chatSettings; guarded by loading state to skip initial load; calls updateChat() with all 7 fields mapped from ChatSettings to DB columns"
+    },
+    {
+      "id": "US-004",
+      "title": "Apply modified settings only to subsequent messages",
+      "description": "As a user, I expect that changing settings mid-conversation only affects new messages I send, so that my existing conversation history remains consistent.",
+      "acceptanceCriteria": [
+        "After changing model mid-chat, the next message uses the new model for generation",
+        "After changing system prompt mid-chat, the next API call includes the updated system prompt",
+        "After changing temperature mid-chat, the next API call uses the new temperature",
+        "Existing messages in the chat history are not regenerated or modified",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "No code changes needed - handleSendMessage in use-chat-handler.tsx uses chatSettings from context directly (line 263: chatSettings: chatSettings!). Since US-002 keeps context updated immediately on any change, the next message automatically uses the new settings. Existing messages are never regenerated."
+    }
+  ]
+}

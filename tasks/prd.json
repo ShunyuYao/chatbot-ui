@@ -1,35 +1,33 @@
 {
   "project": "Chatbot UI",
-  "branchName": "ralph/chat-settings-always-editable",
-  "description": "Chat Settings Always Editable - Allow users to modify all model parameters at any point during a chat session with auto-save to database",
+  "branchName": "ralph/share-chat",
+  "description": "Share Chat History - Generate a public URL for any chat so anyone can view the conversation history in a read-only interface without logging in",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Show chat settings button during active chat",
-      "description": "As a user, I want to see the chat settings button (model name + gear icon) in the top-right corner even after I've sent messages, so that I can access settings at any time.",
+      "title": "创建 shared_chats 数据表",
+      "description": "As a developer, I need a database table to store share records so that shared chats can be retrieved by token.",
       "acceptanceCriteria": [
-        "The ChatSettings component renders in the chat header when chatMessages.length > 0",
-        "The button displays the current model name and gear icon, same as before chat starts",
-        "Clicking the button opens the same settings popover as before",
-        "The settings popover does not overlap or obstruct the chat message area",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "新建 migration 文件，创建 shared_chats 表，包含字段：id (uuid primary key), chat_id (uuid references chats(id) on delete cascade), user_id (uuid references auth.users(id)), share_token (text unique not null), created_at (timestamp with time zone default now())",
+        "对 share_token 字段建立唯一索引",
+        "启用 RLS：所有人均可通过 share_token 读取记录；只有 user_id 匹配的用户可写入/删除",
+        "运行 npm run db-migrate 成功，类型文件自动更新",
+        "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Edit all parameters during active chat",
-      "description": "As a user, I want to modify system prompt, model, temperature, context length, and other settings during a chat, so that I can fine-tune my conversation without starting over.",
+      "title": "创建分享聊天的数据库操作函数",
+      "description": "As a developer, I need CRUD functions for shared chats so that the UI can create and manage share records.",
       "acceptanceCriteria": [
-        "All parameters are editable during active chat: model, prompt, temperature, context length, include profile context, include workspace instructions, embeddings provider",
-        "Editing any parameter updates the in-memory chatSettings state immediately",
-        "The settings form behaves identically to pre-chat editing (same validation, same sliders, same dropdowns)",
-        "When model is changed, temperature and context length are clamped to the new model's valid ranges",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "在 db/shared-chats.ts 中实现 createSharedChat(chatId, userId) — 生成唯一 share_token (使用 crypto.randomUUID())，插入记录，返回完整记录",
+        "在 db/shared-chats.ts 中实现 getSharedChatByToken(shareToken) — 通过 token 查询记录（不需要登录），返回 shared_chat 及关联的 chat_id",
+        "在 db/shared-chats.ts 中实现 deleteSharedChat(shareToken, userId) — 删除指定分享记录（仅限 owner）",
+        "在 db/shared-chats.ts 中实现 getSharedChatByChatId(chatId, userId) — 查询某个 chat 是否已有分享记录",
+        "Typecheck passes"
       ],
       "priority": 2,
       "passes": false,
@@ -37,15 +35,14 @@
     },
     {
       "id": "US-003",
-      "title": "Auto-save settings changes to database",
-      "description": "As a user, I want my parameter changes to be automatically saved to the chat record, so that the settings persist when I reload the page or revisit the chat later.",
+      "title": "创建获取分享聊天内容的 API Route",
+      "description": "As a developer, I need an API endpoint to fetch shared chat messages so that the public share page can display them without requiring auth.",
       "acceptanceCriteria": [
-        "When a parameter is changed during an active chat, updateChat() is called with the updated settings",
-        "The chats table record is updated with the new values for: model, prompt, temperature, context_length, include_profile_context, include_workspace_instructions, embeddings_provider",
-        "The updated_at timestamp is refreshed on save",
-        "After page refresh, reopening the chat shows the last-saved parameter values",
-        "Auto-save is debounced (300-500ms) to avoid excessive database writes when adjusting sliders",
-        "For new chats (before first message), existing behavior is preserved: settings are saved when first message is sent",
+        "新建 app/api/shared-chats/[shareToken]/route.ts（GET 方法）",
+        "通过 share_token 查找对应的 chat_id，若不存在返回 404",
+        "查询该 chat 的所有 messages，过滤掉 role 为 system 的消息以及包含工具调用的消息（tool calls / tool results）",
+        "返回 JSON：{ chat: { id, name, model }, messages: [...] }",
+        "该接口无需身份验证即可访问（使用 supabaseAdmin 或匿名 client，配合 RLS 允许公开读取）",
         "Typecheck passes"
       ],
       "priority": 3,
@@ -54,16 +51,51 @@
     },
     {
       "id": "US-004",
-      "title": "Apply modified settings only to subsequent messages",
-      "description": "As a user, I expect that changing settings mid-conversation only affects new messages I send, so that my existing conversation history remains consistent.",
+      "title": "创建公开分享页面",
+      "description": "As a viewer, I want to open a shared link and see the chat history so that I can read the conversation without logging in.",
       "acceptanceCriteria": [
-        "After changing model mid-chat, the next message uses the new model for generation",
-        "After changing system prompt mid-chat, the next API call includes the updated system prompt",
-        "After changing temperature mid-chat, the next API call uses the new temperature",
-        "Existing messages in the chat history are not regenerated or modified",
-        "Typecheck passes"
+        "新建路由 app/[locale]/share/[shareToken]/page.tsx",
+        "服务端获取聊天数据，若 token 无效则展示"该分享链接不存在或已失效"提示页",
+        "页面展示聊天名称、模型名称、消息列表",
+        "消息列表样式与现有聊天界面一致（复用 ChatMessage 等组件），但不可交互",
+        "页面顶部有明显的"只读"标识，并显示"使用 Chatbot UI 开始你自己的对话"的引导链接",
+        "不显示侧边栏、输入框等聊天操作区域",
+        "需在 Supabase middleware 中排除 /share/* 路径的认证检查，允许未登录访问",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "在聊天列表菜单添加分享入口",
+      "description": "As a user, I want to share a chat from the sidebar context menu so that I can quickly generate a share link.",
+      "acceptanceCriteria": [
+        "在 components/sidebar/items/chat/chat-item.tsx 的操作菜单中添加"分享"选项",
+        "若该 chat 尚未分享：调用 createSharedChat，生成 share URL，复制到剪贴板，显示成功提示"链接已复制"",
+        "若该 chat 已有分享记录：直接将现有 share URL 复制到剪贴板，显示成功提示"链接已复制"",
+        "Share URL 格式为：{window.location.origin}/share/{shareToken}",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "在聊天顶部工具栏添加分享入口",
+      "description": "As a user, I want to share a chat from within the chat view so that I can share while I'm actively reading the conversation.",
+      "acceptanceCriteria": [
+        "在聊天界面顶部工具栏（components/chat/chat-ui.tsx 或相关 header 组件）添加分享按钮（使用 IconShare 图标）",
+        "点击行为与 US-005 一致（检查已有分享记录 → 生成或复用 → 复制到剪贴板 → toast 提示）",
+        "按钮有 tooltip 显示"分享聊天"",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
       "passes": false,
       "notes": ""
     }

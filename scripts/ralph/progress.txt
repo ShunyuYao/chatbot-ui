@@ -1,3 +1,30 @@
+## Codebase Patterns
+- `ChatSettings` component is a self-contained popover button (model name + gear icon) that reads/writes `chatSettings` from `ChatbotUIContext`
+- `npm run type-check` requires `tsc` via local binary: use `node_modules/.bin/tsc --noEmit`
+- Pre-existing TS errors in playwright tests and image imports are not caused by our changes
+- The chat UI layout in `chat-ui.tsx` uses absolute positioning: top-left for scroll buttons, top-right for action buttons
+- `ChatUI` `loading` state starts `true`, set to `false` after `fetchData()` completes; use to guard against firing effects on initial load
+- ChatSettings fields use camelCase; DB columns use snake_case (e.g., `contextLength → context_length`)
+- `updateChat` in `db/chats.ts` accepts `TablesUpdate<"chats">` with all fields optional
+- **Radix UI**: `PopoverTrigger` must use `asChild` when its child is a `<Button>` component, otherwise renders `<button>` inside `<button>` causing a DOM nesting violation and React console error
+- **dev-browser**: To send a chat message, use `locator("textarea").first().focus()` then `keyboard.press("Enter")` — `getByPlaceholder` times out on this component
+- **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
+---
+
 # Ralph Progress Log
 Started: Fri Mar 27 11:01:47 AM CST 2026
+---
+
+## 2026-03-27 - US-001
+- Created migration file `supabase/migrations/20260327000000_create_shared_chats.sql` with:
+  - `shared_chats` table: id (uuid pk), chat_id (uuid fk→chats), user_id (uuid fk→auth.users), share_token (text unique not null), created_at (timestamp tz default now())
+  - Unique index on `share_token`
+  - RLS enabled with 3 policies: public SELECT, owner INSERT, owner DELETE
+- Manually updated `supabase/types.ts` to add `shared_chats` type entries (Row, Insert, Update, Relationships) since local Supabase/Docker is not running
+- **Note**: `npm run db-migrate` requires local Docker; migration was applied by manually updating types.ts. Migration SQL file is ready for `supabase db push` when needed.
+- **Learnings for future iterations:**
+  - No local Supabase (Docker not running); use cloud Supabase. `npm run db-migrate` won't work — update `supabase/types.ts` manually to match migration
+  - `supabase/migrations/` directory did not exist; needed to create it
+  - types.ts format: tables sorted alphabetically, each entry has Row/Insert/Update/Relationships sub-objects
+  - `shared_chats` is alphabetically between `prompts` and `tool_workspaces` in types.ts
 ---
