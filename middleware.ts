@@ -7,6 +7,11 @@ export async function middleware(request: NextRequest) {
   const i18nResult = i18nRouter(request, i18nConfig)
   if (i18nResult) return i18nResult
 
+  // Skip auth check for share pages — they are publicly accessible
+  if (request.nextUrl.pathname.match(/\/share\//)) {
+    return NextResponse.next()
+  }
+
   try {
     const { supabase, response } = createClient(request)
 
