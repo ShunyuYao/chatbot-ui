@@ -391,6 +391,10 @@ export const handleCreateChat = async (
   return createdChat
 }
 
+export const stripThinkingTags = (text: string): string => {
+  return text.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim()
+}
+
 export const handleCreateMessages = async (
   chatMessages: ChatMessage[],
   currentChat: Tables<"chats">,
@@ -408,6 +412,9 @@ export const handleCreateMessages = async (
   setChatImages: React.Dispatch<React.SetStateAction<MessageImage[]>>,
   selectedAssistant: Tables<"assistants"> | null
 ) => {
+  // Strip thinking tags so only the response text is persisted
+  const persistedText = stripThinkingTags(generatedText)
+
   const finalUserMessage: TablesInsert<"messages"> = {
     chat_id: currentChat.id,
     assistant_id: null,
@@ -423,7 +430,7 @@ export const handleCreateMessages = async (
     chat_id: currentChat.id,
     assistant_id: selectedAssistant?.id || null,
     user_id: profile.user_id,
-    content: generatedText,
+    content: persistedText,
     model: modelData.modelId,
     role: "assistant",
     sequence_number: chatMessages.length + 1,
@@ -437,7 +444,7 @@ export const handleCreateMessages = async (
 
     const updatedMessage = await updateMessage(lastStartingMessage.id, {
       ...lastStartingMessage,
-      content: generatedText
+      content: persistedText
     })
 
     chatMessages[chatMessages.length - 1].message = updatedMessage

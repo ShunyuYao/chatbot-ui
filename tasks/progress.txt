@@ -11,6 +11,10 @@
 - **Extended thinking streaming**: Use custom ReadableStream with `for await` over the response (AsyncIterable); track block types via `content_block_start` event's `content_block.type` field; thinking deltas use `thinking_delta` type with `delta.thinking` field
 - **Thinking + temperature**: Anthropic requires `temperature: 1` when thinking is enabled; max_tokens should be at least `budget_tokens + 4096`
 - **ChatSettings**: Does not have `maxTokens` — custom routes should use a hardcoded default (4096)
+- **Chat routing**: Custom model routing is in `handleHostedChat` in `components/chat/chat-helpers/index.ts` — `apiEndpoint` ternary on ~line 221
+- **Thinking + streaming**: `parseThinkingContent` helper handles both complete `<thinking>...</thinking>` blocks and incomplete blocks mid-stream (no closing tag yet)
+- **DB stripping**: `stripThinkingTags` in chat-helpers/index.ts removes thinking tags before persisting — call it before any `createMessages` or `updateMessage`
+
 ---
 
 # Ralph Progress Log
@@ -97,4 +101,33 @@ Started: 2026-03-27
   - `content_block_start` events include `event.index` and `event.content_block.type` — use a Map to track which index corresponds to which block type
   - `content_block_stop` events include `event.index` — use it to look up the block type from the Map
   - Anthropic API requires `temperature: 1` when thinking is enabled
+---
+
+## 2026-03-27 - US-006
+- Modified `components/chat/chat-helpers/index.ts` to route custom Anthropic models to `/api/chat/custom-anthropic`
+- In `handleHostedChat`, changed the `apiEndpoint` assignment to check `modelData.customProviderType === "anthropic"`
+- When `customProviderType` is `"anthropic"`, routes to `/api/chat/custom-anthropic`; otherwise falls through to `/api/chat/custom` (existing behavior preserved)
+- Both paths pass the same `requestBody` with `chatSettings`, `messages`, and `customModelId`
+- Typecheck passes
+- Files changed: `components/chat/chat-helpers/index.ts`
+- **Learnings for future iterations:**
+  - The routing logic is a simple ternary in `handleHostedChat` — the `provider` variable is already `"custom"` for custom models, so we just need to sub-route based on `customProviderType`
+  - `modelData` (LLM type) is available in `handleHostedChat` and carries `customProviderType` from US-002
+---
+
+## 2026-03-27 - US-007
+- Modified `components/messages/message-markdown.tsx` to parse `<thinking>...</thinking>` tags from message content
+- Added `parseThinkingContent()` helper that extracts complete thinking blocks and handles incomplete blocks during streaming
+- Thinking content renders in a collapsible `<details>` element (default collapsed) with title "思考过程"
+- Main text (outside thinking tags) renders as markdown via existing `MessageMarkdownMemoized`
+- Added `stripThinkingTags()` utility in `components/chat/chat-helpers/index.ts`
+- Modified `handleCreateMessages` to strip thinking tags from generated text before saving to DB (both new messages and regenerations)
+- Typecheck passes
+- Files changed: `components/messages/message-markdown.tsx`, `components/chat/chat-helpers/index.ts`
+- **Learnings for future iterations:**
+  - `MessageMarkdown` is the right place to parse and separate content — it's the single renderer for all message content
+  - During streaming, `message.content` includes thinking tags; after DB save, `setChatMessages` replaces with DB version (no thinking tags)
+  - Use `useMemo` for parsing to avoid re-parsing on every render when content hasn't changed
+  - `<details>/<summary>` HTML elements work well for collapsible UI — no need for Radix Collapsible
+  - `stripThinkingTags` must handle both complete and potentially partial blocks at save time
 ---
