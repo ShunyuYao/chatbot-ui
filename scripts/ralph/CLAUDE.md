@@ -91,8 +91,30 @@ If no browser tools are available, note in your progress report that manual brow
 
 After completing a user story, check if ALL stories have `passes: true`.
 
-If ALL stories are complete and passing, reply with:
-<promise>COMPLETE</promise>
+If ALL stories are complete and passing:
+1. Create a PR to `main` using `gh pr create`:
+   - Title: the PRD `description` field (concise, under 70 chars)
+   - Body: list all user stories as a completed checklist, plus a brief summary
+   ```
+   gh pr create --base main --title "..." --body "$(cat <<'EOF'
+   ## Summary
+   <PRD description>
+
+   ## User Stories
+   - [x] US-001: <title>
+   - [x] US-002: <title>
+   ...
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   EOF
+   )"
+   ```
+2. Enable auto-merge so it merges automatically once checks pass:
+   ```
+   gh pr merge --auto --squash
+   ```
+3. Reply with:
+   <promise>COMPLETE</promise>
 
 If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
 
