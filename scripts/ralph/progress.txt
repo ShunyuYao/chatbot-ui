@@ -30,3 +30,14 @@ Started: Fri Mar 27 11:01:47 AM CST 2026
   - types.ts format: tables sorted alphabetically, each entry has Row/Insert/Update/Relationships sub-objects
   - `shared_chats` is alphabetically between `prompts` and `tool_workspaces` in types.ts
 ---
+
+## 2026-03-27 - US-002
+- Created `db/shared-chats.ts` with 4 functions: `createSharedChat`, `getSharedChatByToken`, `deleteSharedChat`, `getSharedChatByChatId`
+- `createSharedChat` uses `crypto.randomUUID()` to generate unique token, inserts into `shared_chats`, returns full record
+- All functions follow the same pattern as `db/chats.ts` using browser supabase client
+- Files changed: `db/shared-chats.ts` (new file)
+- **Learnings for future iterations:**
+  - `getSharedChatByToken` uses browser supabase client; for API routes (US-003), a service/admin client may be needed for server-side access
+  - `crypto.randomUUID()` is available natively in modern browsers and Node.js 14.17+ — no import needed
+  - `maybeSingle()` returns null if no row found (vs `single()` which errors)
+---
