@@ -1,20 +1,67 @@
 import { useChatHandler } from "@/components/chat/chat-hooks/use-chat-handler"
+import { useToast } from "@/components/ui/use-toast"
 import { ChatbotUIContext } from "@/context/context"
-import { IconInfoCircle, IconMessagePlus } from "@tabler/icons-react"
-import { FC, useContext } from "react"
+import { createSharedChat, getSharedChatByChatId } from "@/db/shared-chats"
+import { IconInfoCircle, IconMessagePlus, IconShare } from "@tabler/icons-react"
+import { FC, useContext, useState } from "react"
 import { WithTooltip } from "../ui/with-tooltip"
 
 interface ChatSecondaryButtonsProps {}
 
 export const ChatSecondaryButtons: FC<ChatSecondaryButtonsProps> = ({}) => {
-  const { selectedChat } = useContext(ChatbotUIContext)
+  const { selectedChat, profile } = useContext(ChatbotUIContext)
+  const { toast } = useToast()
+  const [isSharing, setIsSharing] = useState(false)
 
   const { handleNewChat } = useChatHandler()
+
+  const handleShare = async () => {
+    if (!selectedChat || !profile) return
+    setIsSharing(true)
+
+    try {
+      let shareToken: string
+
+      const existing = await getSharedChatByChatId(
+        selectedChat.id,
+        profile.user_id
+      )
+      if (existing) {
+        shareToken = existing.share_token
+      } else {
+        const created = await createSharedChat(selectedChat.id, profile.user_id)
+        shareToken = created.share_token
+      }
+
+      const shareUrl = `${window.location.origin}/share/${shareToken}`
+      await navigator.clipboard.writeText(shareUrl)
+
+      toast({ title: "链接已复制" })
+    } catch {
+      toast({ title: "分享失败，请重试", variant: "destructive" })
+    } finally {
+      setIsSharing(false)
+    }
+  }
 
   return (
     <>
       {selectedChat && (
         <>
+          <WithTooltip
+            delayDuration={200}
+            display={<div>分享聊天</div>}
+            trigger={
+              <div className="mt-1">
+                <IconShare
+                  className={`cursor-pointer hover:opacity-50 ${isSharing ? "animate-pulse" : ""}`}
+                  size={24}
+                  onClick={handleShare}
+                />
+              </div>
+            }
+          />
+
           <WithTooltip
             delayDuration={200}
             display={
