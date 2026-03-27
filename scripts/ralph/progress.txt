@@ -41,3 +41,15 @@ Started: Fri Mar 27 11:01:47 AM CST 2026
   - `crypto.randomUUID()` is available natively in modern browsers and Node.js 14.17+ — no import needed
   - `maybeSingle()` returns null if no row found (vs `single()` which errors)
 ---
+
+## 2026-03-27 - US-003
+- Created `app/api/shared-chats/[shareToken]/route.ts` (GET handler)
+- Uses `createClient` from `@supabase/supabase-js` with `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS for server-side access
+- Steps: look up `share_token` → get chat (`id, name, model`) → get messages ordered by `sequence_number` → filter out `role === "system"` and `role === "tool"` → return JSON `{ chat, messages }`
+- Returns 404 if share token or chat not found
+- Files changed: `app/api/shared-chats/[shareToken]/route.ts` (new file)
+- **Learnings for future iterations:**
+  - API routes needing unauthenticated DB access should use `createClient` from `@supabase/supabase-js` with the service role key (same pattern as `app/api/retrieval/retrieve/route.ts`)
+  - Tool call messages have `role === "tool"` in the DB; filter both "system" and "tool" roles for public sharing
+  - Messages are ordered by `sequence_number` ascending for correct display order
+---
