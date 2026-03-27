@@ -83,3 +83,16 @@ Started: Fri Mar 27 11:01:47 AM CST 2026
   - `navigator.clipboard.writeText()` may silently fail on HTTP (non-secure context); errors are caught and shown via destructive toast
   - Chat item action icons are in the right-side div with `group-hover:opacity-100` class — maintain visual consistency by using same icon size (18px)
 ---
+
+## 2026-03-27 - US-006
+- Added share button with tooltip "分享聊天" to `ChatSecondaryButtons` in the chat top toolbar
+- Reused the same share logic from US-005 (check existing → generate or reuse → copy to clipboard → toast)
+- Button uses `IconShare` size 24, wrapped with `WithTooltip` consistent with other toolbar buttons
+- Button appears leftmost in the top-right action area (before info and new chat buttons)
+- Files changed: `components/chat/chat-secondary-buttons.tsx`
+- Verified in browser: share icon visible in top-right toolbar when a chat is selected
+- **Learnings for future iterations:**
+  - `ChatSecondaryButtons` is the right place for toolbar actions — it already has `selectedChat` from context
+  - The share logic is simple enough to inline directly; no need for a separate component (unlike sidebar which needed reuse)
+  - `profile` is available directly from `ChatbotUIContext` for getting `user_id`
+---
