@@ -13,6 +13,7 @@
 - **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
 - **DB Migrations**: Local Docker/Supabase not running; cloud Supabase is used. `npm run db-migrate` won't work — update `supabase/types.ts` manually to match migration SQL. `.gitignore` has `*.sql` but migration files are now allowed via `!supabase/migrations/*.sql`
 - **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; `shared_chats` is between `prompts` and `tool_workspaces`
+- **Toast notifications**: Use `useToast` hook from `@/components/ui/use-toast` — destructure `{ toast }` from `useToast()`, call `toast({ title: "..." })` for success and `toast({ title: "...", variant: "destructive" })` for errors
 ---
 
 # Ralph Progress Log
@@ -66,4 +67,19 @@ Started: Fri Mar 27 11:01:47 AM CST 2026
   - API routes needing unauthenticated DB access should use `createClient` from `@supabase/supabase-js` with the service role key (same pattern as `app/api/retrieval/retrieve/route.ts`)
   - Tool call messages have `role === "tool"` in the DB; filter both "system" and "tool" roles for public sharing
   - Messages are ordered by `sequence_number` ascending for correct display order
+---
+
+## 2026-03-27 - US-005
+- Created `components/sidebar/items/chat/share-chat.tsx` with `ShareChat` component
+  - Uses `getSharedChatByChatId` to check for existing share record
+  - Uses `createSharedChat` to generate token if not already shared
+  - Copies `{origin}/share/{shareToken}` URL to clipboard
+  - Shows toast "链接已复制" on success, "分享失败，请重试" on error
+  - Uses `IconShare` from `@tabler/icons-react`, shows `animate-pulse` while loading
+- Updated `components/sidebar/items/chat/chat-item.tsx` to import and render `<ShareChat chat={chat} />` before the edit/delete icons
+- Verified in browser: share icon appears on hover (leftmost of 3 action icons), no errors in page
+- **Learnings for future iterations:**
+  - `useToast` hook from `@/components/ui/use-toast` provides `toast()` function — used here for clipboard success/failure feedback
+  - `navigator.clipboard.writeText()` may silently fail on HTTP (non-secure context); errors are caught and shown via destructive toast
+  - Chat item action icons are in the right-side div with `group-hover:opacity-100` class — maintain visual consistency by using same icon size (18px)
 ---
