@@ -21,3 +21,13 @@ Started: 2026-03-27
   - Use `IF NOT EXISTS` in the API call even if migration file doesn't have it, for idempotency
   - New fields with defaults don't break existing code — typecheck passes without any consumer changes
 ---
+
+## 2026-03-27 - US-002
+- Added `customProviderType?: "openai" | "anthropic"` to LLM interface in `types/llms.ts`
+- Updated `components/models/model-select.tsx` to pass `customProviderType: model.provider_type as "openai" | "anthropic"` when mapping custom models to LLM objects
+- Typecheck passes
+- Files changed: `types/llms.ts`, `components/models/model-select.tsx`
+- **Learnings for future iterations:**
+  - The `LLM` interface is the central type used across the app for model selection and routing — adding fields here makes them available everywhere
+  - Custom models are mapped to LLM objects in `model-select.tsx` `allModels` array — this is where DB fields get exposed to the UI/routing layer
+---
