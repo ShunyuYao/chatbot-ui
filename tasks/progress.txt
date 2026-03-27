@@ -1,0 +1,23 @@
+## Codebase Patterns
+- **DB Migrations**: `npm run db-migrate` won't work without local Docker — update `supabase/types.ts` manually, then apply SQL via Supabase Management API. Use `IF NOT EXISTS` for safety.
+- **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; fields within each block also sorted alphabetically
+- **Supabase project ref**: `mlfpqlxqwdifklwunnqe` (extracted from NEXT_PUBLIC_SUPABASE_URL)
+- **Typecheck**: `node_modules/.bin/tsc --noEmit` — pre-existing warnings in lint are not caused by our changes
+---
+
+# Ralph Progress Log
+Started: 2026-03-27
+
+## 2026-03-27 - US-001
+- Created migration file `supabase/migrations/20260327100000_add_provider_type_to_models.sql` with:
+  - `ALTER TABLE models ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'`
+  - `ALTER TABLE models ADD COLUMN thinking_budget_tokens INTEGER NOT NULL DEFAULT 0`
+- Manually updated `supabase/types.ts` to add `provider_type: string` and `thinking_budget_tokens: number` to models Row, Insert, and Update types
+- Applied migration to cloud DB via Supabase Management API (verified columns exist)
+- Typecheck passes
+- Files changed: `supabase/migrations/20260327100000_add_provider_type_to_models.sql` (new), `supabase/types.ts`
+- **Learnings for future iterations:**
+  - Cloud DB API returns `[]` on success for DDL statements
+  - Use `IF NOT EXISTS` in the API call even if migration file doesn't have it, for idempotency
+  - New fields with defaults don't break existing code — typecheck passes without any consumer changes
+---
