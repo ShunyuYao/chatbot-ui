@@ -71,6 +71,7 @@ Sequential SQL migrations. Key tables: `profiles`, `workspaces`, `chats`, `messa
 - Path alias: `@/*` maps to project root
 - TailwindCSS for styling with class-based dark mode
 - Icons from `@tabler/icons-react`
+- **Toast notifications**: Use `import { toast } from "sonner"` — call `toast.success("...")` or `toast.error("...")`. Do NOT use `useToast` from `@/components/ui/use-toast`; that Toaster is not mounted in the layout.
 
 ## Environment Setup
 
@@ -80,3 +81,14 @@ Requires `.env.local` (copy from `.env.local.example`) with:
 - LLM API keys are optional at server level — users can provide their own in profile settings
 
 Local development requires Docker (for Supabase) and Node.js v18+.
+
+**Without local Docker** (cloud Supabase only): `npm run db-migrate` and `npm run db-reset` will not work. Instead:
+1. Manually update `supabase/types.ts` to match any new migration SQL
+2. Apply migrations to the cloud DB via the Supabase Management API:
+   ```
+   curl -X POST "https://api.supabase.com/v1/projects/{ref}/database/query" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "...SQL..."}'
+   ```
+   `supabase db push` also works if you have a personal access token, but direct Postgres connections may be blocked by the network.

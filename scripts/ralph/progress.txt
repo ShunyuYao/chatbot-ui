@@ -1,3 +1,99 @@
+## Codebase Patterns
+- **Share page pattern**: Server components can directly use `createClient` from `@supabase/supabase-js` with service role key for unauthenticated DB access; pair with a client component (share-message-list.tsx) for rendering React-based components like `MessageMarkdown`
+- **Middleware bypass**: Add `if (request.nextUrl.pathname.match(/\/share\//)) return NextResponse.next()` before the supabase auth check to allow unauthenticated access to share pages
+- `ChatSettings` component is a self-contained popover button (model name + gear icon) that reads/writes `chatSettings` from `ChatbotUIContext`
+- `npm run type-check` requires `tsc` via local binary: use `node_modules/.bin/tsc --noEmit`
+- Pre-existing TS errors in playwright tests and image imports are not caused by our changes
+- The chat UI layout in `chat-ui.tsx` uses absolute positioning: top-left for scroll buttons, top-right for action buttons
+- `ChatUI` `loading` state starts `true`, set to `false` after `fetchData()` completes; use to guard against firing effects on initial load
+- ChatSettings fields use camelCase; DB columns use snake_case (e.g., `contextLength → context_length`)
+- `updateChat` in `db/chats.ts` accepts `TablesUpdate<"chats">` with all fields optional
+- **Radix UI**: `PopoverTrigger` must use `asChild` when its child is a `<Button>` component, otherwise renders `<button>` inside `<button>` causing a DOM nesting violation and React console error
+- **dev-browser**: To send a chat message, use `locator("textarea").first().focus()` then `keyboard.press("Enter")` — `getByPlaceholder` times out on this component
+- **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
+- **DB Migrations**: `npm run db-migrate` won't work without local Docker — update `supabase/types.ts` manually, then apply SQL via Supabase Management API (see root CLAUDE.md). `.gitignore` has `*.sql` but migration files are allowed via `!supabase/migrations/*.sql`
+- **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; `shared_chats` is between `prompts` and `tool_workspaces`
+- **Toast notifications**: Use `sonner` (see root CLAUDE.md). ⚠️ Do NOT use `useToast` from `@/components/ui/use-toast`.
+- **ChatSettings in active chat**: `ChatSettings` (model name + gear icon) is only shown on the empty-chat page by default. To show it during active chat, import and add `<ChatSettings />` to the right-side absolute div in `chat-ui.tsx`. Auto-save settings changes to DB using a debounced `useEffect` on `chatSettings` that calls `updateChat()` when `selectedChat` is non-null (500ms debounce).
+---
+
 # Ralph Progress Log
 Started: Fri Mar 27 11:01:47 AM CST 2026
+---
+
+## 2026-03-27 - US-001
+- Created migration file `supabase/migrations/20260327000000_create_shared_chats.sql` with:
+  - `shared_chats` table: id (uuid pk), chat_id (uuid fk→chats), user_id (uuid fk→auth.users), share_token (text unique not null), created_at (timestamp tz default now())
+  - Unique index on `share_token`
+  - RLS enabled with 3 policies: public SELECT, owner INSERT, owner DELETE
+- Manually updated `supabase/types.ts` to add `shared_chats` type entries (Row, Insert, Update, Relationships) since local Supabase/Docker is not running
+- **Note**: `npm run db-migrate` requires local Docker; migration was applied by manually updating types.ts. Migration SQL file is ready for `supabase db push` when needed.
+- **Learnings for future iterations:**
+  - No local Supabase (Docker not running); use cloud Supabase. `npm run db-migrate` won't work — update `supabase/types.ts` manually to match migration
+  - `supabase/migrations/` directory did not exist; needed to create it
+  - types.ts format: tables sorted alphabetically, each entry has Row/Insert/Update/Relationships sub-objects
+  - `shared_chats` is alphabetically between `prompts` and `tool_workspaces` in types.ts
+---
+
+## 2026-03-27 - US-002
+- Created `db/shared-chats.ts` with 4 functions: `createSharedChat`, `getSharedChatByToken`, `deleteSharedChat`, `getSharedChatByChatId`
+- `createSharedChat` uses `crypto.randomUUID()` to generate unique token, inserts into `shared_chats`, returns full record
+- All functions follow the same pattern as `db/chats.ts` using browser supabase client
+- Files changed: `db/shared-chats.ts` (new file)
+- **Learnings for future iterations:**
+  - `getSharedChatByToken` uses browser supabase client; for API routes (US-003), a service/admin client may be needed for server-side access
+  - `crypto.randomUUID()` is available natively in modern browsers and Node.js 14.17+ — no import needed
+  - `maybeSingle()` returns null if no row found (vs `single()` which errors)
+---
+
+## 2026-03-27 - US-004
+- Created `app/[locale]/share/[shareToken]/page.tsx` (server component): fetches shared chat using supabaseAdmin, displays error page for invalid tokens, renders chat name/model/messages
+- Created `app/[locale]/share/[shareToken]/share-message-list.tsx` (client component): renders filtered messages using `MessageMarkdown` with user/assistant icons
+- Updated `middleware.ts` to skip auth checks for `/share/` paths (early return before supabase session check)
+- Verified in browser: invalid token shows 错误页 "该分享链接不存在或已失效" with correct bilingual content and link
+- **Learnings for future iterations:**
+  - `Message` component depends heavily on `ChatbotUIContext` — not reusable in share page; created simpler `ShareMessageList` client component instead
+  - Share page must be a server component for SSR data fetching; message rendering must be a client component because `MessageMarkdown` uses React client features
+  - Middleware `i18nRouter` runs first and may redirect `/en/share/` → `/zh/share/` based on browser locale — this is expected behavior
+  - The lint/pre-commit hook runs `next lint --fix` and prettier format automatically
+---
+
+## 2026-03-27 - US-003
+- Created `app/api/shared-chats/[shareToken]/route.ts` (GET handler)
+- Uses `createClient` from `@supabase/supabase-js` with `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS for server-side access
+- Steps: look up `share_token` → get chat (`id, name, model`) → get messages ordered by `sequence_number` → filter out `role === "system"` and `role === "tool"` → return JSON `{ chat, messages }`
+- Returns 404 if share token or chat not found
+- Files changed: `app/api/shared-chats/[shareToken]/route.ts` (new file)
+- **Learnings for future iterations:**
+  - API routes needing unauthenticated DB access should use `createClient` from `@supabase/supabase-js` with the service role key (same pattern as `app/api/retrieval/retrieve/route.ts`)
+  - Tool call messages have `role === "tool"` in the DB; filter both "system" and "tool" roles for public sharing
+  - Messages are ordered by `sequence_number` ascending for correct display order
+---
+
+## 2026-03-27 - US-005
+- Created `components/sidebar/items/chat/share-chat.tsx` with `ShareChat` component
+  - Uses `getSharedChatByChatId` to check for existing share record
+  - Uses `createSharedChat` to generate token if not already shared
+  - Copies `{origin}/share/{shareToken}` URL to clipboard
+  - Shows toast "链接已复制" on success, "分享失败，请重试" on error
+  - Uses `IconShare` from `@tabler/icons-react`, shows `animate-pulse` while loading
+- Updated `components/sidebar/items/chat/chat-item.tsx` to import and render `<ShareChat chat={chat} />` before the edit/delete icons
+- Verified in browser: share icon appears on hover (leftmost of 3 action icons), no errors in page
+- **Learnings for future iterations:**
+  - `useToast` hook from `@/components/ui/use-toast` provides `toast()` function — used here for clipboard success/failure feedback
+  - `navigator.clipboard.writeText()` may silently fail on HTTP (non-secure context); errors are caught and shown via destructive toast
+  - Chat item action icons are in the right-side div with `group-hover:opacity-100` class — maintain visual consistency by using same icon size (18px)
+---
+
+## 2026-03-27 - US-006
+- Added share button with tooltip "分享聊天" to `ChatSecondaryButtons` in the chat top toolbar
+- Reused the same share logic from US-005 (check existing → generate or reuse → copy to clipboard → toast)
+- Button uses `IconShare` size 24, wrapped with `WithTooltip` consistent with other toolbar buttons
+- Button appears leftmost in the top-right action area (before info and new chat buttons)
+- Files changed: `components/chat/chat-secondary-buttons.tsx`
+- Verified in browser: share icon visible in top-right toolbar when a chat is selected
+- **Learnings for future iterations:**
+  - `ChatSecondaryButtons` is the right place for toolbar actions — it already has `selectedChat` from context
+  - The share logic is simple enough to inline directly; no need for a separate component (unlike sidebar which needed reuse)
+  - `profile` is available directly from `ChatbotUIContext` for getting `user_id`
 ---
