@@ -3,6 +3,8 @@
 - **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; fields within each block also sorted alphabetically
 - **Supabase project ref**: `mlfpqlxqwdifklwunnqe` (extracted from NEXT_PUBLIC_SUPABASE_URL)
 - **Typecheck**: `node_modules/.bin/tsc --noEmit` — pre-existing warnings in lint are not caused by our changes
+- **UI Select**: Radix UI Select is at `@/components/ui/select` — import `Select, SelectTrigger, SelectValue, SelectContent, SelectItem`
+- **Model forms**: create-model.tsx and model-item.tsx both use the pattern: state hooks → createState/updateState → renderInputs; new DB fields can be added via the `as TablesInsert/TablesUpdate` cast
 ---
 
 # Ralph Progress Log
@@ -30,4 +32,19 @@ Started: 2026-03-27
 - **Learnings for future iterations:**
   - The `LLM` interface is the central type used across the app for model selection and routing — adding fields here makes them available everywhere
   - Custom models are mapped to LLM objects in `model-select.tsx` `allModels` array — this is where DB fields get exposed to the UI/routing layer
+---
+
+## 2026-03-27 - US-003
+- Added "Provider Format" Select dropdown (OpenAI Compatible / Anthropic Native) to both create-model.tsx and model-item.tsx
+- Added "Thinking Budget (tokens)" number input that appears only when Anthropic is selected
+- Base URL placeholder changes to `https://api.anthropic.com` when Anthropic is selected
+- Help text dynamically switches between OpenAI SDK and Anthropic SDK compatibility messages
+- Both `provider_type` and `thinking_budget_tokens` are passed in createState/updateState
+- model-item.tsx reads saved values from `model.provider_type` and `model.thinking_budget_tokens`
+- Typecheck passes
+- Files changed: `components/sidebar/items/models/create-model.tsx`, `components/sidebar/items/models/model-item.tsx`
+- **Learnings for future iterations:**
+  - Radix UI Select component is available at `@/components/ui/select` — use `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`
+  - Both create and edit model forms follow the same pattern: state hooks → createState/updateState object → renderInputs JSX
+  - The `as TablesInsert<"models">` / `as TablesUpdate<"models">` casts mean you can pass new DB fields directly without changing the sidebar framework
 ---
