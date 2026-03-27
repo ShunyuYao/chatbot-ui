@@ -1,102 +1,118 @@
 {
   "project": "Chatbot UI",
-  "branchName": "ralph/share-chat",
-  "description": "Share Chat History - Generate a public URL for any chat so anyone can view the conversation history in a read-only interface without logging in",
+  "branchName": "ralph/anthropic-custom-models",
+  "description": "Anthropic 格式自定义模型支持 - 在现有 OpenAI 兼容自定义模型基础上，新增 Anthropic 原生格式支持，包括 vision 图片输入和 extended thinking 推理模式",
   "userStories": [
     {
       "id": "US-001",
-      "title": "创建 shared_chats 数据表",
-      "description": "As a developer, I need a database table to store share records so that shared chats can be retrieved by token.",
+      "title": "数据库迁移：models 表新增 provider_type 和 thinking_budget_tokens 字段",
+      "description": "As a developer, I need to store the provider format and thinking budget of a custom model in the database so the system knows which SDK to use and how to configure thinking.",
       "acceptanceCriteria": [
-        "新建 migration 文件，创建 shared_chats 表，包含字段：id (uuid primary key), chat_id (uuid references chats(id) on delete cascade), user_id (uuid references auth.users(id)), share_token (text unique not null), created_at (timestamp with time zone default now())",
-        "对 share_token 字段建立唯一索引",
-        "启用 RLS：所有人均可通过 share_token 读取记录；只有 user_id 匹配的用户可写入/删除",
-        "运行 npm run db-migrate 成功，类型文件自动更新",
+        "新建 migration 文件至 supabase/migrations/，文件名格式：{timestamp}_add_provider_type_to_models.sql",
+        "Migration SQL 内容：ALTER TABLE models ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'; ALTER TABLE models ADD COLUMN thinking_budget_tokens INTEGER NOT NULL DEFAULT 0;",
+        "通过 Supabase Management API 将 migration 推送至云端数据库（参见 CLAUDE.md 中 Without local Docker 章节）",
+        "更新 supabase/types.ts：在 models 的 Row 类型中加入 provider_type: string 和 thinking_budget_tokens: number；在 Insert 和 Update 类型中加入对应可选字段",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "创建分享聊天的数据库操作函数",
-      "description": "As a developer, I need CRUD functions for shared chats so that the UI can create and manage share records.",
+      "title": "LLM 类型新增 customProviderType 字段，model-select.tsx 传递 provider_type",
+      "description": "As a developer, I need the LLM interface to carry provider_type information so the chat routing logic can decide which API endpoint to call.",
       "acceptanceCriteria": [
-        "在 db/shared-chats.ts 中实现 createSharedChat(chatId, userId) — 生成唯一 share_token (使用 crypto.randomUUID())，插入记录，返回完整记录",
-        "在 db/shared-chats.ts 中实现 getSharedChatByToken(shareToken) — 通过 token 查询记录（不需要登录），返回 shared_chat 及关联的 chat_id",
-        "在 db/shared-chats.ts 中实现 deleteSharedChat(shareToken, userId) — 删除指定分享记录（仅限 owner）",
-        "在 db/shared-chats.ts 中实现 getSharedChatByChatId(chatId, userId) — 查询某个 chat 是否已有分享记录",
+        "在 types/llms.ts 的 LLM interface 中新增可选字段 customProviderType?: 'openai' | 'anthropic'",
+        "在 components/models/model-select.tsx 中，将自定义模型转换为 LLM 对象时，加入 customProviderType: model.provider_type as 'openai' | 'anthropic'",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "创建获取分享聊天内容的 API Route",
-      "description": "As a developer, I need an API endpoint to fetch shared chat messages so that the public share page can display them without requiring auth.",
+      "title": "创建/编辑模型 UI 新增提供商格式选择和 thinking budget 配置",
+      "description": "As a user, I want to select OpenAI or Anthropic format when adding a custom model and configure the thinking budget, so the system can call it correctly.",
       "acceptanceCriteria": [
-        "新建 app/api/shared-chats/[shareToken]/route.ts（GET 方法）",
-        "通过 share_token 查找对应的 chat_id，若不存在返回 404",
-        "查询该 chat 的所有 messages，过滤掉 role 为 system 的消息以及包含工具调用的消息（tool calls / tool results）",
-        "返回 JSON：{ chat: { id, name, model }, messages: [...] }",
-        "该接口无需身份验证即可访问（使用 supabaseAdmin 或匿名 client，配合 RLS 允许公开读取）",
-        "Typecheck passes"
+        "在 components/sidebar/items/models/create-model.tsx 中新增「提供商格式」Select 下拉，选项为「OpenAI 兼容」(值: openai) 和「Anthropic 原生」(值: anthropic)，默认 openai",
+        "在 create-model.tsx 中新增「Thinking Budget（tokens）」数字输入框（仅当选择 Anthropic 时显示），默认值 0，0 表示禁用 extended thinking",
+        "选择 Anthropic 时，Base URL 输入框的 placeholder 改为 https://api.anthropic.com",
+        "在 components/sidebar/items/models/model-item.tsx 中同样新增上述两个字段，并从 model.provider_type 和 model.thinking_budget_tokens 回显已保存的值",
+        "表单提交时将 provider_type 和 thinking_budget_tokens 传入 createModel 和 updateModel 调用",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "创建公开分享页面",
-      "description": "As a viewer, I want to open a shared link and see the chat history so that I can read the conversation without logging in.",
+      "title": "新建 Anthropic 格式 API 路由（文本 + vision + 流式响应）",
+      "description": "As a developer, I need an API route that calls Anthropic-format endpoints using the Anthropic SDK, supporting text and image inputs with streaming responses.",
       "acceptanceCriteria": [
-        "新建路由 app/[locale]/share/[shareToken]/page.tsx",
-        "服务端获取聊天数据，若 token 无效则展示"该分享链接不存在或已失效"提示页",
-        "页面展示聊天名称、模型名称、消息列表",
-        "消息列表样式与现有聊天界面一致（复用 ChatMessage 等组件），但不可交互",
-        "页面顶部有明显的"只读"标识，并显示"使用 Chatbot UI 开始你自己的对话"的引导链接",
-        "不显示侧边栏、输入框等聊天操作区域",
-        "需在 Supabase middleware 中排除 /share/* 路径的认证检查，允许未登录访问",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "新建 app/api/chat/custom-anthropic/route.ts，声明 export const runtime = 'edge'",
+        "路由接收 POST 请求，body 包含 chatSettings、messages、customModelId",
+        "通过 customModelId 从数据库查询 customModel，获取 api_key、base_url、model_id、thinking_budget_tokens",
+        "使用 @anthropic-ai/sdk 初始化 Anthropic 客户端，传入 apiKey 和 baseURL",
+        "将 messages 中 role 为 system 的消息内容提取为顶层 system 参数，其余消息保留 user/assistant role",
+        "将消息中的图片内容（base64 data URL 或 http/https URL）转换为 Anthropic image content block 格式：{ type: 'image', source: { type: 'base64'|'url', ... } }",
+        "调用 client.messages.create() 时传入 model: customModel.model_id、max_tokens: chatSettings.maxTokens 或默认 4096、temperature、system、messages",
+        "使用 Anthropic SDK streaming（stream: true 或 client.messages.stream()），将 text delta 事件转为 ReadableStream 返回（参考 app/api/chat/anthropic/route.ts 的实现）",
+        "若 customModel 不存在，返回 500 错误并附带错误信息",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "在聊天列表菜单添加分享入口",
-      "description": "As a user, I want to share a chat from the sidebar context menu so that I can quickly generate a share link.",
+      "title": "Anthropic API 路由支持 extended thinking，流式输出时分离 thinking block",
+      "description": "As a user, I want the API route to enable extended thinking when configured, and stream thinking content separately from response text.",
       "acceptanceCriteria": [
-        "在 components/sidebar/items/chat/chat-item.tsx 的操作菜单中添加"分享"选项",
-        "若该 chat 尚未分享：调用 createSharedChat，生成 share URL，复制到剪贴板，显示成功提示"链接已复制"",
-        "若该 chat 已有分享记录：直接将现有 share URL 复制到剪贴板，显示成功提示"链接已复制"",
-        "Share URL 格式为：{window.location.origin}/share/{shareToken}",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "在 app/api/chat/custom-anthropic/route.ts 中，当 customModel.thinking_budget_tokens > 0 时，在 API 调用参数中加入 thinking: { type: 'enabled', budget_tokens: customModel.thinking_budget_tokens }",
+        "当 thinking 开启时，betas 参数需包含 'interleaved-thinking-2025-05-14'（参考 Anthropic 文档）",
+        "在流式输出中，thinking block 的 delta 内容以特殊前缀 <thinking> 开头、</thinking> 结尾包裹后发送给客户端；text block 的 delta 内容正常发送",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "在聊天顶部工具栏添加分享入口",
-      "description": "As a user, I want to share a chat from within the chat view so that I can share while I'm actively reading the conversation.",
+      "title": "聊天路由逻辑：根据 provider_type 路由到正确的 API",
+      "description": "As a user, when I use a custom Anthropic model in chat, the request should automatically be routed to the Anthropic API endpoint.",
       "acceptanceCriteria": [
-        "在聊天界面顶部工具栏（components/chat/chat-ui.tsx 或相关 header 组件）添加分享按钮（使用 IconShare 图标）",
-        "点击行为与 US-005 一致（检查已有分享记录 → 生成或复用 → 复制到剪贴板 → toast 提示）",
-        "按钮有 tooltip 显示"分享聊天"",
+        "在 components/chat/chat-helpers/index.ts 中，找到处理 provider === 'custom' 的分支",
+        "当 modelData.customProviderType === 'anthropic' 时，请求发送到 /api/chat/custom-anthropic",
+        "当 modelData.customProviderType === 'openai' 或 customProviderType 未定义时，请求发送到 /api/chat/custom（现有行为不变）",
+        "两条路径都传递相同的基础参数：chatSettings、messages、customModelId",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "聊天消息组件折叠显示 thinking block 内容",
+      "description": "As a user, I want to see the model's thinking process in a collapsible section during and after streaming, so I can inspect the reasoning without it cluttering the main response.",
+      "acceptanceCriteria": [
+        "在 components/chat/ 中找到渲染消息内容的组件（如 message-content 或 chat-message），新增对 <thinking>...</thinking> 标记的解析",
+        "将 <thinking>...</thinking> 包裹的内容渲染为折叠面板（默认折叠），面板标题为「思考过程」，使用现有 Radix UI Collapsible 或简单的 details/summary 元素",
+        "折叠面板外的内容正常渲染为 markdown",
+        "流式输出过程中，thinking block 内容实时追加到折叠面板内；text block 内容实时追加到正文区域",
+        "流结束后，存入数据库的 message content 仅保留正文部分（不包含 <thinking> 标签），thinking 内容不持久化",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": false,
       "notes": ""
     }
   ]
