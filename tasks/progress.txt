@@ -5,6 +5,9 @@
 - **Typecheck**: `node_modules/.bin/tsc --noEmit` — pre-existing warnings in lint are not caused by our changes
 - **UI Select**: Radix UI Select is at `@/components/ui/select` — import `Select, SelectTrigger, SelectValue, SelectContent, SelectItem`
 - **Model forms**: create-model.tsx and model-item.tsx both use the pattern: state hooks → createState/updateState → renderInputs; new DB fields can be added via the `as TablesInsert/TablesUpdate` cast
+- **Custom model routes**: Use `createClient` with service role key to query models table; `getServerProfile()` is for built-in provider routes only
+- **Anthropic streaming**: `AnthropicStream` from `ai` library works with `anthropic.messages.create({ stream: true })` responses
+- **ChatSettings**: Does not have `maxTokens` — custom routes should use a hardcoded default (4096)
 ---
 
 # Ralph Progress Log
@@ -47,4 +50,23 @@ Started: 2026-03-27
   - Radix UI Select component is available at `@/components/ui/select` — use `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`
   - Both create and edit model forms follow the same pattern: state hooks → createState/updateState object → renderInputs JSX
   - The `as TablesInsert<"models">` / `as TablesUpdate<"models">` casts mean you can pass new DB fields directly without changing the sidebar framework
+---
+
+## 2026-03-27 - US-004
+- Created `app/api/chat/custom-anthropic/route.ts` — new edge runtime API route for Anthropic-format custom models
+- Fetches custom model from DB via Supabase service role key (same pattern as `custom/route.ts`)
+- Initializes Anthropic SDK client with model's api_key and base_url
+- Extracts system message from first message into top-level `system` parameter
+- Formats messages with Anthropic content blocks: text → `{ type: "text", text }`, image → `{ type: "image", source: { type: "base64"|"url", ... } }`
+- Handles both base64 data URL images and http/https URL images
+- Streams response using `AnthropicStream` from `ai` library (same as existing anthropic route)
+- Returns 500 with error message if custom model not found
+- Default max_tokens: 4096
+- Typecheck passes
+- Files changed: `app/api/chat/custom-anthropic/route.ts` (new)
+- **Learnings for future iterations:**
+  - `ChatSettings` does not have a `maxTokens` field — use a hardcoded default (4096) for custom models
+  - Anthropic image content blocks support both `base64` and `url` source types; check if URL starts with `data:` to determine which
+  - The `AnthropicStream` helper from the `ai` library works with `anthropic.messages.create({ stream: true })` responses
+  - Custom API routes use `createClient` with service role key to query the models table, not `getServerProfile()`
 ---

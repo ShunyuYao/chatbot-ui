@@ -93,17 +93,82 @@ export async function POST(request: Request) {
       }
     })
 
-    const response = await anthropic.messages.create({
+    const thinkingBudget = customModel.thinking_budget_tokens || 0
+    const useThinking = thinkingBudget > 0
+
+    const createParams: Record<string, any> = {
       model: customModel.model_id,
       messages: formattedMessages,
-      temperature: chatSettings.temperature,
+      temperature: useThinking ? 1 : chatSettings.temperature,
       system: systemMessage,
-      max_tokens: 4096,
+      max_tokens: useThinking ? Math.max(4096, thinkingBudget + 4096) : 4096,
       stream: true
-    })
+    }
 
-    const stream = AnthropicStream(response)
-    return new StreamingTextResponse(stream)
+    if (useThinking) {
+      createParams.thinking = {
+        type: "enabled",
+        budget_tokens: thinkingBudget
+      }
+    }
+
+    const requestOptions = useThinking
+      ? {
+          headers: {
+            "anthropic-beta": "interleaved-thinking-2025-05-14"
+          }
+        }
+      : undefined
+
+    const response = await (anthropic.messages.create as Function)(
+      createParams,
+      requestOptions
+    )
+
+    if (useThinking) {
+      // Custom stream that separates thinking blocks from text blocks
+      let inThinkingBlock = false
+      const blockTypes: Map<number, string> = new Map()
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder()
+          try {
+            for await (const event of response as AsyncIterable<any>) {
+              if (event.type === "content_block_start") {
+                const blockType = event.content_block?.type || "text"
+                blockTypes.set(event.index, blockType)
+                if (blockType === "thinking") {
+                  inThinkingBlock = true
+                  controller.enqueue(encoder.encode("<thinking>"))
+                }
+              } else if (event.type === "content_block_delta") {
+                const delta = event.delta
+                if (delta?.type === "thinking_delta" && delta?.thinking) {
+                  controller.enqueue(encoder.encode(delta.thinking))
+                } else if (delta?.type === "text_delta" && delta?.text) {
+                  controller.enqueue(encoder.encode(delta.text))
+                }
+              } else if (event.type === "content_block_stop") {
+                const blockType = blockTypes.get(event.index)
+                if (blockType === "thinking" && inThinkingBlock) {
+                  controller.enqueue(encoder.encode("</thinking>"))
+                  inThinkingBlock = false
+                }
+              }
+            }
+            controller.close()
+          } catch (err) {
+            controller.error(err)
+          }
+        }
+      })
+
+      return new StreamingTextResponse(stream)
+    } else {
+      const stream = AnthropicStream(response)
+      return new StreamingTextResponse(stream)
+    }
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500
