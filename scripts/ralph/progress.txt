@@ -9,6 +9,8 @@
 - **Radix UI**: `PopoverTrigger` must use `asChild` when its child is a `<Button>` component, otherwise renders `<button>` inside `<button>` causing a DOM nesting violation and React console error
 - **dev-browser**: To send a chat message, use `locator("textarea").first().focus()` then `keyboard.press("Enter")` — `getByPlaceholder` times out on this component
 - **dev-browser**: `getByRole("button", { name: "..." })` throws strict mode error if multiple matches exist — use `.first()` to disambiguate
+- **DB Migrations**: Local Docker/Supabase not running; cloud Supabase is used. `npm run db-migrate` won't work — update `supabase/types.ts` manually to match migration SQL. `.gitignore` has `*.sql` but migration files are now allowed via `!supabase/migrations/*.sql`
+- **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; `shared_chats` is between `prompts` and `tool_workspaces`
 ---
 
 # Ralph Progress Log
