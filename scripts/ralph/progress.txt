@@ -1,4 +1,6 @@
 ## Codebase Patterns
+- **Share page pattern**: Server components can directly use `createClient` from `@supabase/supabase-js` with service role key for unauthenticated DB access; pair with a client component (share-message-list.tsx) for rendering React-based components like `MessageMarkdown`
+- **Middleware bypass**: Add `if (request.nextUrl.pathname.match(/\/share\//)) return NextResponse.next()` before the supabase auth check to allow unauthenticated access to share pages
 - `ChatSettings` component is a self-contained popover button (model name + gear icon) that reads/writes `chatSettings` from `ChatbotUIContext`
 - `npm run type-check` requires `tsc` via local binary: use `node_modules/.bin/tsc --noEmit`
 - Pre-existing TS errors in playwright tests and image imports are not caused by our changes
@@ -40,6 +42,18 @@ Started: Fri Mar 27 11:01:47 AM CST 2026
   - `getSharedChatByToken` uses browser supabase client; for API routes (US-003), a service/admin client may be needed for server-side access
   - `crypto.randomUUID()` is available natively in modern browsers and Node.js 14.17+ — no import needed
   - `maybeSingle()` returns null if no row found (vs `single()` which errors)
+---
+
+## 2026-03-27 - US-004
+- Created `app/[locale]/share/[shareToken]/page.tsx` (server component): fetches shared chat using supabaseAdmin, displays error page for invalid tokens, renders chat name/model/messages
+- Created `app/[locale]/share/[shareToken]/share-message-list.tsx` (client component): renders filtered messages using `MessageMarkdown` with user/assistant icons
+- Updated `middleware.ts` to skip auth checks for `/share/` paths (early return before supabase session check)
+- Verified in browser: invalid token shows 错误页 "该分享链接不存在或已失效" with correct bilingual content and link
+- **Learnings for future iterations:**
+  - `Message` component depends heavily on `ChatbotUIContext` — not reusable in share page; created simpler `ShareMessageList` client component instead
+  - Share page must be a server component for SSR data fetching; message rendering must be a client component because `MessageMarkdown` uses React client features
+  - Middleware `i18nRouter` runs first and may redirect `/en/share/` → `/zh/share/` based on browser locale — this is expected behavior
+  - The lint/pre-commit hook runs `next lint --fix` and prettier format automatically
 ---
 
 ## 2026-03-27 - US-003
