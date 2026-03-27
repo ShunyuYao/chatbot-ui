@@ -27,6 +27,11 @@ module.exports = withBundleAnalyzer(
     },
     experimental: {
       serverComponentsExternalPackages: ["sharp", "onnxruntime-node"]
+    },
+    webpack: (config) => {
+      // Limit parallelism on low-resource servers to prevent CPU overload
+      config.parallelism = 1
+      return config
     }
   })
 )
