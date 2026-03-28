@@ -45,8 +45,7 @@ sw.js.map
 workbox-*.js
 workbox-*.js.map
 docker-compose.yml
-public/worker-jpynPjVP_FI7T1Cc9X7i-.js
+public/worker-*.js
 
 # SQL migrations
 *.sql
-!supabase/migrations/*.sql
