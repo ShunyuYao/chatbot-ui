@@ -937,7 +937,9 @@ export type Database = {
           id: string
           model_id: string
           name: string
+          provider_type: string
           sharing: string
+          thinking_budget_tokens: number
           updated_at: string | null
           user_id: string
         }
@@ -951,7 +953,9 @@ export type Database = {
           id?: string
           model_id: string
           name: string
+          provider_type?: string
           sharing?: string
+          thinking_budget_tokens?: number
           updated_at?: string | null
           user_id: string
         }
@@ -965,7 +969,9 @@ export type Database = {
           id?: string
           model_id?: string
           name?: string
+          provider_type?: string
           sharing?: string
+          thinking_budget_tokens?: number
           updated_at?: string | null
           user_id?: string
         }

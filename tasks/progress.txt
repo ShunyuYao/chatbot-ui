@@ -1,0 +1,133 @@
+## Codebase Patterns
+- **DB Migrations**: `npm run db-migrate` won't work without local Docker — update `supabase/types.ts` manually, then apply SQL via Supabase Management API. Use `IF NOT EXISTS` for safety.
+- **types.ts format**: Tables sorted alphabetically, each entry has Row/Insert/Update/Relationships; fields within each block also sorted alphabetically
+- **Supabase project ref**: `mlfpqlxqwdifklwunnqe` (extracted from NEXT_PUBLIC_SUPABASE_URL)
+- **Typecheck**: `node_modules/.bin/tsc --noEmit` — pre-existing warnings in lint are not caused by our changes
+- **UI Select**: Radix UI Select is at `@/components/ui/select` — import `Select, SelectTrigger, SelectValue, SelectContent, SelectItem`
+- **Model forms**: create-model.tsx and model-item.tsx both use the pattern: state hooks → createState/updateState → renderInputs; new DB fields can be added via the `as TablesInsert/TablesUpdate` cast
+- **Custom model routes**: Use `createClient` with service role key to query models table; `getServerProfile()` is for built-in provider routes only
+- **Anthropic streaming**: `AnthropicStream` from `ai` library works with `anthropic.messages.create({ stream: true })` responses — but does NOT support thinking blocks
+- **Extended thinking**: SDK v0.18.0 lacks thinking types — use `Record<string, any>` for createParams and cast `anthropic.messages.create as Function` to bypass type errors; pass `anthropic-beta` header via RequestOptions second argument
+- **Extended thinking streaming**: Use custom ReadableStream with `for await` over the response (AsyncIterable); track block types via `content_block_start` event's `content_block.type` field; thinking deltas use `thinking_delta` type with `delta.thinking` field
+- **Thinking + temperature**: Anthropic requires `temperature: 1` when thinking is enabled; max_tokens should be at least `budget_tokens + 4096`
+- **ChatSettings**: Does not have `maxTokens` — custom routes should use a hardcoded default (4096)
+- **Chat routing**: Custom model routing is in `handleHostedChat` in `components/chat/chat-helpers/index.ts` — `apiEndpoint` ternary on ~line 221
+- **Thinking + streaming**: `parseThinkingContent` helper handles both complete `<thinking>...</thinking>` blocks and incomplete blocks mid-stream (no closing tag yet)
+- **DB stripping**: `stripThinkingTags` in chat-helpers/index.ts removes thinking tags before persisting — call it before any `createMessages` or `updateMessage`
+
+---
+
+# Ralph Progress Log
+Started: 2026-03-27
+
+## 2026-03-27 - US-001
+- Created migration file `supabase/migrations/20260327100000_add_provider_type_to_models.sql` with:
+  - `ALTER TABLE models ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'`
+  - `ALTER TABLE models ADD COLUMN thinking_budget_tokens INTEGER NOT NULL DEFAULT 0`
+- Manually updated `supabase/types.ts` to add `provider_type: string` and `thinking_budget_tokens: number` to models Row, Insert, and Update types
+- Applied migration to cloud DB via Supabase Management API (verified columns exist)
+- Typecheck passes
+- Files changed: `supabase/migrations/20260327100000_add_provider_type_to_models.sql` (new), `supabase/types.ts`
+- **Learnings for future iterations:**
+  - Cloud DB API returns `[]` on success for DDL statements
+  - Use `IF NOT EXISTS` in the API call even if migration file doesn't have it, for idempotency
+  - New fields with defaults don't break existing code — typecheck passes without any consumer changes
+---
+
+## 2026-03-27 - US-002
+- Added `customProviderType?: "openai" | "anthropic"` to LLM interface in `types/llms.ts`
+- Updated `components/models/model-select.tsx` to pass `customProviderType: model.provider_type as "openai" | "anthropic"` when mapping custom models to LLM objects
+- Typecheck passes
+- Files changed: `types/llms.ts`, `components/models/model-select.tsx`
+- **Learnings for future iterations:**
+  - The `LLM` interface is the central type used across the app for model selection and routing — adding fields here makes them available everywhere
+  - Custom models are mapped to LLM objects in `model-select.tsx` `allModels` array — this is where DB fields get exposed to the UI/routing layer
+---
+
+## 2026-03-27 - US-003
+- Added "Provider Format" Select dropdown (OpenAI Compatible / Anthropic Native) to both create-model.tsx and model-item.tsx
+- Added "Thinking Budget (tokens)" number input that appears only when Anthropic is selected
+- Base URL placeholder changes to `https://api.anthropic.com` when Anthropic is selected
+- Help text dynamically switches between OpenAI SDK and Anthropic SDK compatibility messages
+- Both `provider_type` and `thinking_budget_tokens` are passed in createState/updateState
+- model-item.tsx reads saved values from `model.provider_type` and `model.thinking_budget_tokens`
+- Typecheck passes
+- Files changed: `components/sidebar/items/models/create-model.tsx`, `components/sidebar/items/models/model-item.tsx`
+- **Learnings for future iterations:**
+  - Radix UI Select component is available at `@/components/ui/select` — use `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`
+  - Both create and edit model forms follow the same pattern: state hooks → createState/updateState object → renderInputs JSX
+  - The `as TablesInsert<"models">` / `as TablesUpdate<"models">` casts mean you can pass new DB fields directly without changing the sidebar framework
+---
+
+## 2026-03-27 - US-004
+- Created `app/api/chat/custom-anthropic/route.ts` — new edge runtime API route for Anthropic-format custom models
+- Fetches custom model from DB via Supabase service role key (same pattern as `custom/route.ts`)
+- Initializes Anthropic SDK client with model's api_key and base_url
+- Extracts system message from first message into top-level `system` parameter
+- Formats messages with Anthropic content blocks: text → `{ type: "text", text }`, image → `{ type: "image", source: { type: "base64"|"url", ... } }`
+- Handles both base64 data URL images and http/https URL images
+- Streams response using `AnthropicStream` from `ai` library (same as existing anthropic route)
+- Returns 500 with error message if custom model not found
+- Default max_tokens: 4096
+- Typecheck passes
+- Files changed: `app/api/chat/custom-anthropic/route.ts` (new)
+- **Learnings for future iterations:**
+  - `ChatSettings` does not have a `maxTokens` field — use a hardcoded default (4096) for custom models
+  - Anthropic image content blocks support both `base64` and `url` source types; check if URL starts with `data:` to determine which
+  - The `AnthropicStream` helper from the `ai` library works with `anthropic.messages.create({ stream: true })` responses
+  - Custom API routes use `createClient` with service role key to query the models table, not `getServerProfile()`
+---
+
+## 2026-03-27 - US-005
+- Modified `app/api/chat/custom-anthropic/route.ts` to support extended thinking
+- When `thinking_budget_tokens > 0`:
+  - Adds `thinking: { type: "enabled", budget_tokens }` to API create params
+  - Passes `anthropic-beta: interleaved-thinking-2025-05-14` header via RequestOptions
+  - Forces `temperature: 1` (Anthropic requirement for thinking mode)
+  - Sets `max_tokens` to `Math.max(4096, thinkingBudget + 4096)` to accommodate both thinking and output
+- Custom ReadableStream handler for thinking-enabled streams:
+  - Tracks block types via `content_block_start` events (Map of index → type)
+  - Emits `<thinking>` tag when a thinking block starts
+  - Streams `thinking_delta` content within the tags
+  - Emits `</thinking>` tag when thinking block ends
+  - Text deltas stream normally outside tags
+- Used `Record<string, any>` for createParams and `as Function` cast to work with SDK v0.18.0 (no thinking types)
+- When thinking is disabled (budget = 0), falls through to original `AnthropicStream` path
+- Typecheck passes
+- Files changed: `app/api/chat/custom-anthropic/route.ts`
+- **Learnings for future iterations:**
+  - SDK v0.18.0 has no `thinking` param or `thinking_delta` event types — use type assertions to bypass
+  - Anthropic streaming response is an AsyncIterable — use `for await (const event of response)` for manual handling
+  - `content_block_start` events include `event.index` and `event.content_block.type` — use a Map to track which index corresponds to which block type
+  - `content_block_stop` events include `event.index` — use it to look up the block type from the Map
+  - Anthropic API requires `temperature: 1` when thinking is enabled
+---
+
+## 2026-03-27 - US-006
+- Modified `components/chat/chat-helpers/index.ts` to route custom Anthropic models to `/api/chat/custom-anthropic`
+- In `handleHostedChat`, changed the `apiEndpoint` assignment to check `modelData.customProviderType === "anthropic"`
+- When `customProviderType` is `"anthropic"`, routes to `/api/chat/custom-anthropic`; otherwise falls through to `/api/chat/custom` (existing behavior preserved)
+- Both paths pass the same `requestBody` with `chatSettings`, `messages`, and `customModelId`
+- Typecheck passes
+- Files changed: `components/chat/chat-helpers/index.ts`
+- **Learnings for future iterations:**
+  - The routing logic is a simple ternary in `handleHostedChat` — the `provider` variable is already `"custom"` for custom models, so we just need to sub-route based on `customProviderType`
+  - `modelData` (LLM type) is available in `handleHostedChat` and carries `customProviderType` from US-002
+---
+
+## 2026-03-27 - US-007
+- Modified `components/messages/message-markdown.tsx` to parse `<thinking>...</thinking>` tags from message content
+- Added `parseThinkingContent()` helper that extracts complete thinking blocks and handles incomplete blocks during streaming
+- Thinking content renders in a collapsible `<details>` element (default collapsed) with title "思考过程"
+- Main text (outside thinking tags) renders as markdown via existing `MessageMarkdownMemoized`
+- Added `stripThinkingTags()` utility in `components/chat/chat-helpers/index.ts`
+- Modified `handleCreateMessages` to strip thinking tags from generated text before saving to DB (both new messages and regenerations)
+- Typecheck passes
+- Files changed: `components/messages/message-markdown.tsx`, `components/chat/chat-helpers/index.ts`
+- **Learnings for future iterations:**
+  - `MessageMarkdown` is the right place to parse and separate content — it's the single renderer for all message content
+  - During streaming, `message.content` includes thinking tags; after DB save, `setChatMessages` replaces with DB version (no thinking tags)
+  - Use `useMemo` for parsing to avoid re-parsing on every render when content hasn't changed
+  - `<details>/<summary>` HTML elements work well for collapsible UI — no need for Radix Collapsible
+  - `stripThinkingTags` must handle both complete and potentially partial blocks at save time
+---

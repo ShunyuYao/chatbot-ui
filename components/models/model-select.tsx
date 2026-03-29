@@ -57,7 +57,8 @@ export const ModelSelect: FC<ModelSelectProps> = ({
       provider: "custom" as ModelProvider,
       hostedId: model.id,
       platformLink: "",
-      imageInput: false
+      imageInput: false,
+      customProviderType: model.provider_type as "openai" | "anthropic"
     })),
     ...availableHostedModels,
     ...availableLocalModels,
